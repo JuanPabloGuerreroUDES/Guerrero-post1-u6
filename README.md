@@ -171,6 +171,71 @@ Salida de `mvn test` en las dos versiones:
 [INFO] BUILD SUCCESS
 ```
 
+### Parte 2 — El sistema crece: tres campañas de descuento
+
+Mercadeo pidió tres campañas: **BLACK_FRIDAY** (25% mientras esté activa), **CORPORATIVO** (10%
+si el cliente tiene NIT) y **VOLUMEN** (12% si el pedido supera 20 unidades). Se resolvieron
+agregando `PromocionBlackFriday`, `PromocionCorporativo` y `PromocionVolumen` como tres eslabones
+más de la cadena de validación. Funciona (las 20 pruebas pasan), pero el diseño tiene un problema.
+
+> Los números de línea corresponden al commit `4bfa885`, antes de la corrección:
+> ```
+> git show 4bfa885:src/main/java/com/tienda/pedidos/service/GestorPedidos.java
+> ```
+
+#### Antipatrón identificado: Golden Hammer
+
+En la Parte 1, Chain of Responsibility funcionó bien para `ValidadorStock` y `ValidadorCliente`.
+Para las campañas se usó otra vez **porque ya estaba ahí y había funcionado**, sin revisar si el
+problema nuevo tenía la misma forma. Esta es la evidencia de que no la tenía:
+
+**1. No hay dependencia de orden entre las campañas.**
+`ContextoPedido.aplicarDescuentoCampana()` (líneas 33–34) se queda con el mayor valor recibido.
+Tomar el máximo es conmutativo, así que encadenar `blackFriday → corporativo → volumen`
+(`GestorPedidos`, línea 42) da exactamente lo mismo que `volumen → blackFriday → corporativo`.
+En cambio, `ValidadorStock` **sí** tiene que ir antes que `ValidadorCliente`: si no hay stock no
+tiene sentido consultar la cartera. El orden, que es lo que justificaba la cadena, aquí no aporta
+nada.
+
+**2. Nunca hay corte anticipado.**
+`grep -rn "rechazar(" validacion/` devuelve 4 llamadas, todas en `ValidadorStock` (líneas 28 y 34)
+y `ValidadorCliente` (líneas 31 y 48). Ninguno de los tres eslabones nuevos rechaza nada, y el
+propio código lo admite: `PromocionBlackFriday`, línea 18:
+*"nunca rechaza -- este eslabon no valida nada"*. Son clases que heredan de `ValidadorPedido`
+cuyo contrato es "decidir si el pedido continúa o se rechaza", pero no validan: se aprovechan de
+que la cadena ya recorre el pedido para escribir en un campo compartido. Eso rompe el principio
+de sustitución de Liskov: un `ValidadorPedido` que no valida.
+
+**3. La única dependencia de orden que existe es accidental.**
+Las campañas solo funcionan si van *después* de `ValidadorCliente`. Si alguien pusiera
+`PromocionCorporativo` primero, el `queryForObject` de la línea 14 lanzaría
+`EmptyResultDataAccessException` con un cliente inexistente (el mismo bug que se corrigió en la
+Parte 1). No es una regla de negocio, es una casualidad de la implementación.
+
+**4. La regla del descuento quedó repartida en tres lugares.**
+Para saber qué descuento recibe un pedido ahora hay que leer:
+`SelectorEstrategiaDescuento` (tipo de cliente), `ContextoPedido.aplicarDescuentoCampana()`
+(línea 34, "el mayor descuento gana" entre campañas) y `GestorPedidos`, línea 63
+(`Math.max(descuentoTipoCliente, contexto.getDescuentoCampana())`). Si mercadeo pidiera que dos
+campañas se **sumen** en vez de competir, habría que cambiar `ContextoPedido`, una clase que
+también usan los validadores, y no hay forma de expresarlo en la cadena sin ambigüedad: cada
+eslabón solo ve el valor que dejó el anterior, no sabe de qué campaña vino.
+
+**5. Las campañas corren antes de conocer el subtotal.**
+La cadena se ejecuta en la línea 54 y el subtotal se calcula después, en la línea 59. Una campaña
+del tipo "10% en compras mayores a $1.000.000" **no se podría implementar** como eslabón. Por eso
+`PromocionVolumen` tiene que recalcular las unidades por su cuenta desde el request (línea 10, y
+su comentario de la línea 4 lo dice).
+
+**6. El gestor vuelve a crecer con cada campaña.**
+El constructor de `GestorPedidos` pasó de 6 a **9 parámetros** (líneas 36–40) y cada campaña nueva
+obliga a modificarlo para engancharla en la cadena (línea 42): otra vez se viola Open/Closed, que
+era justo lo que la Parte 1 había arreglado.
+
+**Conclusión del diagnóstico:** las tres campañas tienen la misma forma que `DescuentoVip` y
+`DescuentoFrecuente` (calculan un porcentaje a partir del pedido o del cliente, sin orden y sin
+cortar el flujo). El problema era de Strategy, no de Chain of Responsibility.
+
 ## Cómo ejecutar
 
 ```
