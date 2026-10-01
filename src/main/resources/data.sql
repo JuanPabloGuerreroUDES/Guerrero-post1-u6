@@ -31,3 +31,7 @@ FROM SYSTEM_RANGE(1, 12);
 INSERT INTO pedidos (cliente_id, subtotal, descuento, impuesto, total, fecha, estado)
 SELECT 5, 50000, 0, 9500, 59500, TIMESTAMP '2026-08-01 10:00:00', 'CONFIRMADO'
 FROM SYSTEM_RANGE(1, 5);
+
+-- Cliente corporativo: es ESTANDAR pero tiene NIT registrado
+INSERT INTO clientes (id, nombre, email, tipo_cliente, nit) VALUES
+    (6, 'Distribuidora Andina SAS', 'compras@andina.com', 'ESTANDAR', '900123456-7');

@@ -13,7 +13,8 @@ CREATE TABLE clientes (
     id           BIGINT PRIMARY KEY,
     nombre       VARCHAR(100) NOT NULL,
     email        VARCHAR(100) NOT NULL,
-    tipo_cliente VARCHAR(20) NOT NULL
+    tipo_cliente VARCHAR(20) NOT NULL,
+    nit          VARCHAR(20)
 );
 
 CREATE TABLE facturas (

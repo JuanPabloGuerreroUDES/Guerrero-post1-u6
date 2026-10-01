@@ -7,6 +7,9 @@ import com.tienda.pedidos.dto.ResultadoPedido;
 import com.tienda.pedidos.repository.PedidoRepository;
 import com.tienda.pedidos.repository.ProductoRepository;
 import com.tienda.pedidos.validacion.ContextoPedido;
+import com.tienda.pedidos.validacion.PromocionBlackFriday;
+import com.tienda.pedidos.validacion.PromocionCorporativo;
+import com.tienda.pedidos.validacion.PromocionVolumen;
 import com.tienda.pedidos.validacion.ValidadorCliente;
 import com.tienda.pedidos.validacion.ValidadorPedido;
 import com.tienda.pedidos.validacion.ValidadorStock;
@@ -28,11 +31,15 @@ public class GestorPedidos {
     private final PedidoRepository pedidoRepository;
     private final NotificacionPedidoService notificacion;
 
+    // GestorPedidos ahora encadena 5 eslabones (2 de validacion real + 3 de "promocion")
+    // y combina el descuento de Strategy con el descuentoCampana escrito por la cadena
     public GestorPedidos(ValidadorStock validadorStock, ValidadorCliente validadorCliente,
-                         SelectorEstrategiaDescuento selectorDescuento,
+                         PromocionBlackFriday blackFriday, PromocionCorporativo corporativo,
+                         PromocionVolumen volumen, SelectorEstrategiaDescuento selectorDescuento,
                          ProductoRepository productoRepository, PedidoRepository pedidoRepository,
                          NotificacionPedidoService notificacion) {
-        validadorStock.encadenar(validadorCliente);
+        validadorStock.encadenar(validadorCliente)
+            .encadenar(blackFriday).encadenar(corporativo).encadenar(volumen);
         this.primerValidador = validadorStock;
         this.selectorDescuento = selectorDescuento;
         this.productoRepository = productoRepository;
@@ -52,7 +59,8 @@ public class GestorPedidos {
         double subtotal = calcularSubtotal(request);
         contexto.setSubtotal(subtotal);
 
-        double descuento = selectorDescuento.seleccionar(contexto.getTipoCliente()).calcular(contexto);
+        double descuentoTipoCliente = selectorDescuento.seleccionar(contexto.getTipoCliente()).calcular(contexto);
+        double descuento = Math.max(descuentoTipoCliente, contexto.getDescuentoCampana());
         double impuesto = (subtotal - subtotal * descuento) * IVA;
         double total = subtotal - (subtotal * descuento) + impuesto;
 
