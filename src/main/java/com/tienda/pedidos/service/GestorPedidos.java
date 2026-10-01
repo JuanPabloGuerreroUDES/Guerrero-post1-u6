@@ -44,8 +44,10 @@ public class GestorPedidos {
         }
 
         // ---- Validacion de cliente y mora, con excepcion por horario ----
-        String tipoCliente = jdbcTemplate.queryForObject(
-            "SELECT tipo_cliente FROM clientes WHERE id = ?", String.class, request.getClienteId());
+        // queryForObject lanza excepcion si no hay fila, por eso se lee el resultado a mano
+        String tipoCliente = jdbcTemplate.query(
+            "SELECT tipo_cliente FROM clientes WHERE id = ?",
+            rs -> rs.next() ? rs.getString(1) : null, request.getClienteId());
         if (tipoCliente == null) {
             log.warn("Cliente no encontrado: {}", request.getClienteId());
             return ResultadoPedido.rechazado("Cliente no registrado");

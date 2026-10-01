@@ -74,6 +74,16 @@ class GestorPedidosTest {
     }
 
     @Test
+    @DisplayName("Cliente que no existe en la base de datos se rechaza")
+    void clienteInexistente() {
+        ResultadoPedido r = gestorPedidos.procesarPedido(pedido(99L, List.of(new ItemPedido(MOUSE, 1))));
+
+        assertFalse(r.isConfirmado());
+        assertEquals("Cliente no registrado", r.getMotivoRechazo());
+        assertEquals(100, stockDe(MOUSE));
+    }
+
+    @Test
     @DisplayName("Cliente moroso dentro del horario de corte (10:00) se rechaza")
     void morosoDentroDelHorario() {
         LocalTime diezDeLaManana = LocalTime.of(10, 0);
