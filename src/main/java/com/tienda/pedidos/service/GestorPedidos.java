@@ -1,15 +1,12 @@
 package com.tienda.pedidos.service;
 
-import com.tienda.pedidos.descuento.SelectorEstrategiaDescuento;
+import com.tienda.pedidos.descuento.CalculadorDescuentoFinal;
 import com.tienda.pedidos.dto.ItemPedido;
 import com.tienda.pedidos.dto.PedidoRequest;
 import com.tienda.pedidos.dto.ResultadoPedido;
 import com.tienda.pedidos.repository.PedidoRepository;
 import com.tienda.pedidos.repository.ProductoRepository;
 import com.tienda.pedidos.validacion.ContextoPedido;
-import com.tienda.pedidos.validacion.PromocionBlackFriday;
-import com.tienda.pedidos.validacion.PromocionCorporativo;
-import com.tienda.pedidos.validacion.PromocionVolumen;
 import com.tienda.pedidos.validacion.ValidadorCliente;
 import com.tienda.pedidos.validacion.ValidadorPedido;
 import com.tienda.pedidos.validacion.ValidadorStock;
@@ -26,22 +23,18 @@ public class GestorPedidos {
     private static final double IVA = 0.19;
 
     private final ValidadorPedido primerValidador;
-    private final SelectorEstrategiaDescuento selectorDescuento;
+    private final CalculadorDescuentoFinal calculadorDescuento;
     private final ProductoRepository productoRepository;
     private final PedidoRepository pedidoRepository;
     private final NotificacionPedidoService notificacion;
 
-    // GestorPedidos ahora encadena 5 eslabones (2 de validacion real + 3 de "promocion")
-    // y combina el descuento de Strategy con el descuentoCampana escrito por la cadena
     public GestorPedidos(ValidadorStock validadorStock, ValidadorCliente validadorCliente,
-                         PromocionBlackFriday blackFriday, PromocionCorporativo corporativo,
-                         PromocionVolumen volumen, SelectorEstrategiaDescuento selectorDescuento,
+                         CalculadorDescuentoFinal calculadorDescuento,
                          ProductoRepository productoRepository, PedidoRepository pedidoRepository,
                          NotificacionPedidoService notificacion) {
-        validadorStock.encadenar(validadorCliente)
-            .encadenar(blackFriday).encadenar(corporativo).encadenar(volumen);
+        validadorStock.encadenar(validadorCliente);
         this.primerValidador = validadorStock;
-        this.selectorDescuento = selectorDescuento;
+        this.calculadorDescuento = calculadorDescuento;
         this.productoRepository = productoRepository;
         this.pedidoRepository = pedidoRepository;
         this.notificacion = notificacion;
@@ -59,8 +52,7 @@ public class GestorPedidos {
         double subtotal = calcularSubtotal(request);
         contexto.setSubtotal(subtotal);
 
-        double descuentoTipoCliente = selectorDescuento.seleccionar(contexto.getTipoCliente()).calcular(contexto);
-        double descuento = Math.max(descuentoTipoCliente, contexto.getDescuentoCampana());
+        double descuento = calculadorDescuento.calcular(contexto);
         double impuesto = (subtotal - subtotal * descuento) * IVA;
         double total = subtotal - (subtotal * descuento) + impuesto;
 

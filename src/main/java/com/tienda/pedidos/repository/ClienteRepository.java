@@ -30,6 +30,13 @@ public class ClienteRepository {
         return deuda != null ? deuda : 0.0;
     }
 
+    public Optional<String> buscarNit(Long clienteId) {
+        String nit = jdbcTemplate.query(
+            "SELECT nit FROM clientes WHERE id = ?",
+            rs -> rs.next() ? rs.getString(1) : null, clienteId);
+        return Optional.ofNullable(nit);
+    }
+
     public int contarPedidos(Long clienteId) {
         Integer cantidad = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM pedidos WHERE cliente_id = ?", Integer.class, clienteId);
